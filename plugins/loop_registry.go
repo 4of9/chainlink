@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/consul/sdk/freeport"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
@@ -74,6 +75,8 @@ func (m *LoopRegistry) Register(id string) (*RegisteredLoop, error) {
 		envCfg.TelemetryCACertFile = m.cfgTelemetry.CACertFile()
 		envCfg.TelemetryAttributes = m.cfgTelemetry.ResourceAttributes()
 		envCfg.TelemetryTraceSampleRatio = m.cfgTelemetry.TraceSampleRatio()
+		envCfg.TelemetryAuthHeaders = beholder.GetAuthenticator().GetHeaders()
+		envCfg.TelemetryAuthPubKeyHex = fmt.Sprintf("%x", beholder.GetAuthenticator().GetPubKey())
 	}
 
 	m.registry[id] = &RegisteredLoop{Name: id, EnvCfg: envCfg}
