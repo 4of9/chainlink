@@ -78,12 +78,16 @@ func (m *LoopRegistry) Register(id string) (*RegisteredLoop, error) {
 		envCfg.TelemetryCACertFile = m.cfgTelemetry.CACertFile()
 		envCfg.TelemetryAttributes = m.cfgTelemetry.ResourceAttributes()
 		envCfg.TelemetryTraceSampleRatio = m.cfgTelemetry.TraceSampleRatio()
-		envCfg.TelemetryAuthHeaders = m.telemetryAuthHeaders
 		envCfg.TelemetryAuthPubKeyHex = m.telemetryAuthPubKeyHex
+	}
+	m.lggr.Debugf("Registered loopp %q with config %v, port %d", id, envCfg, envCfg.PrometheusPort)
+
+	// Add auth header after logging config
+	if m.cfgTelemetry != nil {
+		envCfg.TelemetryAuthHeaders = m.telemetryAuthHeaders
 	}
 
 	m.registry[id] = &RegisteredLoop{Name: id, EnvCfg: envCfg}
-	m.lggr.Debugf("Registered loopp %q with config %v, port %d", id, envCfg, envCfg.PrometheusPort)
 	return m.registry[id], nil
 }
 
