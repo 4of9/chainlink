@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"crypto/tls"
 	"database/sql"
 	"encoding/json"
@@ -67,7 +66,7 @@ var (
 	grpcOpts        loop.GRPCOpts
 )
 
-func initGlobals(cfgProm config.Prometheus, cfgTracing config.Tracing, cfgTelemetry config.Telemetry, lggr logger.Logger, csaPubKey []byte, csaSigner func([]byte) []byte) error {
+func initGlobals(cfgProm config.Prometheus, cfgTracing config.Tracing, cfgTelemetry config.Telemetry, lggr logger.Logger, csaPubKeyHex string, beholderAuthHeaders map[string]string) error {
 	// Avoid double initializations, but does not prevent relay methods from being called multiple times.
 	var err error
 	initGlobalsOnce.Do(func() {
@@ -105,8 +104,8 @@ func initGlobals(cfgProm config.Prometheus, cfgTracing config.Tracing, cfgTeleme
 				OtelExporterGRPCEndpoint: cfgTelemetry.OtelExporterGRPCEndpoint(),
 				ResourceAttributes:       attributes,
 				TraceSampleRatio:         cfgTelemetry.TraceSampleRatio(),
-				AuthenticatorPublicKey:   csaPubKey,
-				AuthenticatorSigner:      csaSigner,
+				AuthPublicKeyHex:         csaPubKeyHex,
+				AuthHeaders:              beholderAuthHeaders,
 			}
 			if tracingCfg.Enabled {
 				clientCfg.TraceSpanExporter, err = tracingCfg.NewSpanExporter()
@@ -209,25 +208,19 @@ func (n ChainlinkAppFactory) NewApplication(ctx context.Context, cfg chainlink.G
 		return nil, errors.Wrap(err, "failed to ensure CSA key")
 	}
 
-	csaKeys, err := keyStore.CSA().GetAll()
+	beholderAuthHeaders, csaPubKeyHex, err := keystore.BuildBeholderAuth(keyStore)
 	if err != nil {
-		return nil, err
-	}
-	csaKey := csaKeys[0]
-	csaPubKey := csaKey.PublicKey
-	csaPrivKey := csaKey.Raw().Bytes()
-	csaSigner := func(data []byte) []byte {
-		return ed25519.Sign(csaPrivKey, data)
+		return nil, errors.Wrap(err, "failed to build Beholder auth")
 	}
 
-	err = initGlobals(cfg.Prometheus(), cfg.Tracing(), cfg.Telemetry(), appLggr, csaPubKey, csaSigner)
+	err = initGlobals(cfg.Prometheus(), cfg.Tracing(), cfg.Telemetry(), appLggr, csaPubKeyHex, beholderAuthHeaders)
 	if err != nil {
 		appLggr.Errorf("Failed to initialize globals: %v", err)
 	}
 
 	mailMon := mailbox.NewMonitor(cfg.AppID().String(), appLggr.Named("Mailbox"))
 
-	loopRegistry := plugins.NewLoopRegistry(appLggr, cfg.Tracing(), cfg.Telemetry())
+	loopRegistry := plugins.NewLoopRegistry(appLggr, cfg.Tracing(), cfg.Telemetry(), beholderAuthHeaders, csaPubKeyHex)
 
 	mercuryPool := wsrpc.NewPool(appLggr, cache.Config{
 		LatestReportTTL:      cfg.Mercury().Cache().LatestReportTTL(),
