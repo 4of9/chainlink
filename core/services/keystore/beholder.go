@@ -13,7 +13,7 @@ func BuildBeholderAuth(keyStore Master) (authHeaders map[string]string, pubKeyHe
 	}
 	csaKey := csaKeys[0]
 	csaPrivKey := csaKey.Raw().Bytes()
-	authHeaders = beholder.BuildAuthHeaders(csaPrivKey, csaKey.PublicKey)
+	authHeaders = beholder.BuildAuthHeaders(csaPrivKey)
 	pubKeyHex = hex.EncodeToString(csaKey.PublicKey)
 	return
 }
