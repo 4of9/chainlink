@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/tls"
 	"database/sql"
 	"encoding/json"
@@ -66,7 +67,7 @@ var (
 	grpcOpts        loop.GRPCOpts
 )
 
-func initGlobals(cfgProm config.Prometheus, cfgTracing config.Tracing, cfgTelemetry config.Telemetry, lggr logger.Logger) error {
+func initGlobals(cfgProm config.Prometheus, cfgTracing config.Tracing, cfgTelemetry config.Telemetry, lggr logger.Logger, csaPubKey []byte, csaSigner func([]byte) []byte) error {
 	// Avoid double initializations, but does not prevent relay methods from being called multiple times.
 	var err error
 	initGlobalsOnce.Do(func() {
@@ -97,12 +98,15 @@ func initGlobals(cfgProm config.Prometheus, cfgTracing config.Tracing, cfgTeleme
 			for k, v := range cfgTelemetry.ResourceAttributes() {
 				attributes = append(attributes, attribute.String(k, v))
 			}
+
 			clientCfg := beholder.Config{
 				InsecureConnection:       cfgTelemetry.InsecureConnection(),
 				CACertFile:               cfgTelemetry.CACertFile(),
 				OtelExporterGRPCEndpoint: cfgTelemetry.OtelExporterGRPCEndpoint(),
 				ResourceAttributes:       attributes,
 				TraceSampleRatio:         cfgTelemetry.TraceSampleRatio(),
+				AuthenticatorPublicKey:   csaPubKey,
+				AuthenticatorSigner:      csaSigner,
 			}
 			if tracingCfg.Enabled {
 				clientCfg.TraceSpanExporter, err = tracingCfg.NewSpanExporter()
@@ -180,11 +184,7 @@ type AppFactory interface {
 type ChainlinkAppFactory struct{}
 
 // NewApplication returns a new instance of the node with the given config.
-func (n ChainlinkAppFactory) NewApplication(ctx context.Context, cfg chainlink.GeneralConfig, appLggr logger.Logger, db *sqlx.DB) (app chainlink.Application, err error) {
-	err = initGlobals(cfg.Prometheus(), cfg.Tracing(), cfg.Telemetry(), appLggr)
-	if err != nil {
-		appLggr.Errorf("Failed to initialize globals: %v", err)
-	}
+func (n ChainlinkAppFactory) NewApplication(ctx context.Context, cfg chainlink.GeneralConfig, appLggr logger.Logger, db *sqlx.DB, keyStoreAuthenticator TerminalKeyStoreAuthenticator) (app chainlink.Application, err error) {
 
 	err = migrate.SetMigrationENVVars(cfg)
 	if err != nil {
@@ -202,6 +202,27 @@ func (n ChainlinkAppFactory) NewApplication(ctx context.Context, cfg chainlink.G
 	err = keyStoreAuthenticator.authenticate(ctx, keyStore, cfg.Password())
 	if err != nil {
 		return nil, errors.Wrap(err, "error authenticating keystore")
+	}
+
+	err = keyStore.CSA().EnsureKey(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to ensure CSA key")
+	}
+
+	csaKeys, err := keyStore.CSA().GetAll()
+	if err != nil {
+		return nil, err
+	}
+	csaKey := csaKeys[0]
+	csaPubKey := csaKey.PublicKey
+	csaPrivKey := csaKey.Raw().Bytes()
+	csaSigner := func(data []byte) []byte {
+		return ed25519.Sign(csaPrivKey, data)
+	}
+
+	err = initGlobals(cfg.Prometheus(), cfg.Tracing(), cfg.Telemetry(), appLggr, csaPubKey, csaSigner)
+	if err != nil {
+		appLggr.Errorf("Failed to initialize globals: %v", err)
 	}
 
 	mailMon := mailbox.NewMonitor(cfg.AppID().String(), appLggr.Named("Mailbox"))
