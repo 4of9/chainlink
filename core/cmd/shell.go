@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/Depado/ginprom"
+	"github.com/Masterminds/semver/v3"
+	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
