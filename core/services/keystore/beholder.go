@@ -1,7 +1,6 @@
 package keystore
 
 import (
-	"crypto/ed25519"
 	"encoding/hex"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
@@ -14,10 +13,7 @@ func BuildBeholderAuth(keyStore Master) (authHeaders map[string]string, pubKeyHe
 	}
 	csaKey := csaKeys[0]
 	csaPrivKey := csaKey.Raw().Bytes()
-	csaSigner := func(data []byte) []byte {
-		return ed25519.Sign(csaPrivKey, data)
-	}
-	authHeaders = beholder.BuildAuthHeaders(csaSigner, csaKey.PublicKey)
+	authHeaders = beholder.BuildAuthHeaders(csaPrivKey, csaKey.PublicKey)
 	pubKeyHex = hex.EncodeToString(csaKey.PublicKey)
 	return
 }
