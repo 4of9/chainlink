@@ -20,8 +20,6 @@ import (
 	"time"
 
 	"github.com/Depado/ginprom"
-	"github.com/Masterminds/semver/v3"
-	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
@@ -184,7 +182,6 @@ type ChainlinkAppFactory struct{}
 
 // NewApplication returns a new instance of the node with the given config.
 func (n ChainlinkAppFactory) NewApplication(ctx context.Context, cfg chainlink.GeneralConfig, appLggr logger.Logger, db *sqlx.DB, keyStoreAuthenticator TerminalKeyStoreAuthenticator) (app chainlink.Application, err error) {
-
 	err = migrate.SetMigrationENVVars(cfg)
 	if err != nil {
 		return nil, err
