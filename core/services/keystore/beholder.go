@@ -7,7 +7,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 )
 
-func BuildBeholderAuth(keyStore Master) (map[string]string, string, error) {
+func BuildBeholderAuth(keyStore Master) (authHeaders map[string]string, pubKeyHex string, err error) {
 	csaKeys, err := keyStore.CSA().GetAll()
 	if err != nil {
 		return nil, "", err
@@ -17,7 +17,7 @@ func BuildBeholderAuth(keyStore Master) (map[string]string, string, error) {
 	csaSigner := func(data []byte) []byte {
 		return ed25519.Sign(csaPrivKey, data)
 	}
-	beholderAuthHeaders := beholder.BuildAuthHeaders(csaSigner, csaKey.PublicKey)
-
-	return beholderAuthHeaders, hex.EncodeToString(csaKey.PublicKey), nil
+	authHeaders = beholder.BuildAuthHeaders(csaSigner, csaKey.PublicKey)
+	pubKeyHex = hex.EncodeToString(csaKey.PublicKey)
+	return
 }
